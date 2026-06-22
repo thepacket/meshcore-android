@@ -26,7 +26,8 @@ object Requests {
             .str(appName)
             .build()
 
-    fun deviceQuery(): ByteArray = FrameWriter().u8(Cmd.DEVICE_QUERY).build()
+    /** Query device info. Requires the app-protocol version byte (firmware needs len >= 2). */
+    fun deviceQuery(appVer: Int = 3): ByteArray = FrameWriter().u8(Cmd.DEVICE_QUERY).u8(appVer).build()
 
     fun getDeviceTime(): ByteArray = FrameWriter().u8(Cmd.GET_DEVICE_TIME).build()
 
