@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Router
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -31,6 +32,7 @@ import org.thepacket.meshcore.ble.ScannedDevice
 import org.thepacket.meshcore.protocol.SelfInfo
 import org.thepacket.meshcore.protocol.toHex
 
+@OptIn(ExperimentalMaterial3Api::class) // Material3 TopAppBar
 @Composable
 fun ConnectScreen(
     state: UiState,

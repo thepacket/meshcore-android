@@ -68,6 +68,9 @@ class NordicMeshCoreLink(context: Context) : MeshCoreLink {
 
     override suspend fun send(frame: ByteArray) = manager.sendFrame(frame)
 
+    // BleManagerGattCallback is deprecated in newer Nordic releases but is the stable,
+    // documented pattern for ble 2.7.x (pinned in the version catalog).
+    @Suppress("DEPRECATION")
     private inner class Manager(ctx: Context) : BleManager(ctx) {
         private var rx: BluetoothGattCharacteristic? = null
         private var tx: BluetoothGattCharacteristic? = null
