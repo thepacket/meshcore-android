@@ -33,6 +33,7 @@ import java.util.ArrayDeque
 class MeshSession(
     private val link: MeshCoreLink,
     private val scope: CoroutineScope,
+    private val chatStore: ChatStore? = null,
 ) {
     private companion object {
         const val MAX_CHANNELS = 8 // safety cap when probing channel slots
@@ -87,10 +88,18 @@ class MeshSession(
     private var enumeratingChannels = false
     private var draining = false
     private var localIdSeq = 0L
+    private var saveJob: Job? = null
     /** Outgoing messages awaiting their immediate SENT/OK reply, FIFO (link is sequential). */
     private val pendingSends = ArrayDeque<Long>()
 
     init {
+        // Restore persisted chat history (survives disconnects + app restarts).
+        chatStore?.load()?.let { saved ->
+            if (saved.isNotEmpty()) {
+                _messages.value = saved
+                localIdSeq = saved.values.flatten().maxOfOrNull { it.localId } ?: 0L
+            }
+        }
         scope.launch { link.incoming.collect(::onFrame) }
     }
 
@@ -105,7 +114,7 @@ class MeshSession(
         _self.value = null
         _contacts.value = emptyList()
         _channels.value = emptyList()
-        _messages.value = emptyMap()
+        // NB: _messages is intentionally NOT cleared — chat history persists across disconnects.
         _packets.value = emptyList()
         _radioStats.value = null
         _coreStats.value = null
@@ -290,6 +299,9 @@ class MeshSession(
     private fun storeIncoming(m: org.thepacket.meshcore.protocol.IncomingMessage) {
         val convId = if (m.isChannel) Conversation.channelId(m.channelIdx)
         else Conversation.dmId(m.pubKeyPrefix)
+        // Dedup: skip if an identical incoming message is already stored (e.g. across reconnects).
+        val existing = _messages.value[convId].orEmpty()
+        if (existing.any { it.incoming && it.timestampSecs == m.senderTimestamp && it.text == m.text }) return
         appendMessage(
             ChatMessage(
                 localId = ++localIdSeq,
@@ -337,6 +349,7 @@ class MeshSession(
             }
         }
         Log.d(TAG, "CONFIRMED ackId=$ackId trip=${roundTripMs}ms matched=$matched")
+        if (matched) scheduleSave()
     }
 
     // ---- message store helpers -------------------------------------------
@@ -346,11 +359,23 @@ class MeshSession(
             val list = map[msg.conversationId].orEmpty() + msg
             map + (msg.conversationId to list)
         }
+        scheduleSave()
     }
 
     private fun updateMessage(localId: Long, transform: (ChatMessage) -> ChatMessage) {
         _messages.update { map ->
             map.mapValues { (_, list) -> list.map { if (it.localId == localId) transform(it) else it } }
+        }
+        scheduleSave()
+    }
+
+    /** Persist chat history shortly after a change (debounced to coalesce bursts). */
+    private fun scheduleSave() {
+        val store = chatStore ?: return
+        saveJob?.cancel()
+        saveJob = scope.launch {
+            delay(400)
+            store.save(_messages.value)
         }
     }
 }

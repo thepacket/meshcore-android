@@ -38,7 +38,7 @@ class ConnectionViewModel(app: Application) : AndroidViewModel(app) {
 
     private val scanner = CompanionScanner(app)
     private val link = NordicMeshCoreLink(app)
-    val session = MeshSession(link, viewModelScope)
+    val session = MeshSession(link, viewModelScope, ChatStore(app))
 
     private val _ui = MutableStateFlow(UiState())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
