@@ -68,6 +68,12 @@ Minimum Android 8.0 (API 26); compiled/targeted at API 35. Handles both the mode
 (`BLUETOOTH_SCAN`/`CONNECT`, API 31+) and legacy (location-based scan, API 26–30)
 permission models.
 
+## Contributing
+
+This is an independent personal project and **does not accept pull requests** — any PR
+is closed automatically. Fork freely (MIT permits it); see [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and ideas are welcome via Issues.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Third-party deps in [THIRD_PARTY.md](THIRD_PARTY.md).
