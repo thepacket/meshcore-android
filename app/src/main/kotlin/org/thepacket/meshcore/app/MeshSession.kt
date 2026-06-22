@@ -1,7 +1,7 @@
 package org.thepacket.meshcore.app
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,7 +25,10 @@ class MeshSession(
     private val link: MeshCoreLink,
     private val scope: CoroutineScope,
 ) {
-    private companion object { const val MAX_CHANNELS = 8 } // safety cap when probing channel slots
+    private companion object {
+        const val MAX_CHANNELS = 8 // safety cap when probing channel slots
+        const val TAG = "MeshSession"
+    }
 
     private val _self = MutableStateFlow<SelfInfo?>(null)
     val self: StateFlow<SelfInfo?> = _self.asStateFlow()
@@ -104,6 +107,7 @@ class MeshSession(
     // ---- incoming frames --------------------------------------------------
 
     private fun onFrame(f: Incoming) {
+        Log.d(TAG, "rx ${f::class.simpleName}")
         when (f) {
             is Incoming.Self -> {
                 _self.value = f.info
@@ -182,19 +186,12 @@ class MeshSession(
 
     private fun onSentReply(expectedAck: Long, estTimeoutMs: Long) {
         val localId = pendingSends.pollFirst() ?: return
+        Log.d(TAG, "SENT localId=$localId expectedAck=$expectedAck estTimeout=$estTimeoutMs")
         updateMessage(localId) {
             it.copy(status = MsgStatus.Sent, expectedAck = expectedAck)
         }
-        if (expectedAck != 0L) {
-            // mark failed if no SendConfirmed arrives within the firmware's estimate (+slack)
-            val timeout = (if (estTimeoutMs > 0) estTimeoutMs else 10_000) + 3_000
-            scope.launch {
-                delay(timeout)
-                updateMessage(localId) {
-                    if (it.status == MsgStatus.Sent) it.copy(status = MsgStatus.Failed) else it
-                }
-            }
-        }
+        // Do NOT hard-fail on a client timer: the mesh may still be delivering, and a late
+        // SendConfirmed can upgrade Sent -> Delivered. Leave it at "Sent" if no ack returns.
     }
 
     /** Channel sends (and other ok-replying sends) get RESP_CODE_OK with no ack. */
@@ -209,11 +206,18 @@ class MeshSession(
     }
 
     private fun markDelivered(ackId: Long, roundTripMs: Long) {
+        var matched = false
         _messages.update { map ->
             map.mapValues { (_, list) ->
-                list.map { if (it.expectedAck == ackId && !it.incoming) it.copy(status = MsgStatus.Delivered) else it }
+                list.map {
+                    if (it.expectedAck == ackId && !it.incoming) {
+                        matched = true
+                        it.copy(status = MsgStatus.Delivered)
+                    } else it
+                }
             }
         }
+        Log.d(TAG, "CONFIRMED ackId=$ackId trip=${roundTripMs}ms matched=$matched")
     }
 
     // ---- message store helpers -------------------------------------------
