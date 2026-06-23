@@ -52,6 +52,29 @@ object Requests {
     fun setAdvertName(name: String): ByteArray =
         FrameWriter().u8(Cmd.SET_ADVERT_NAME).str(name).build()
 
+    /** Add or update a contact in the device's store (same layout as RESP_CODE_CONTACT). */
+    fun addUpdateContact(c: Contact): ByteArray = FrameWriter()
+        .u8(Cmd.ADD_UPDATE_CONTACT)
+        .bytes(c.publicKey.copyOf(32))
+        .u8(c.type)
+        .u8(c.flags)
+        .u8(c.outPathLen)
+        .bytes(c.outPath.copyOf(64))
+        .bytes(name32(c.name))
+        .u32(c.lastAdvert)
+        .i32(c.gpsLat)
+        .i32(c.gpsLon)
+        .u32(c.lastMod)
+        .build()
+
+    /** 32-byte NUL-terminated name field (truncated to 31 chars + NUL). */
+    private fun name32(s: String): ByteArray {
+        val out = ByteArray(32)
+        val b = s.toByteArray(Charsets.UTF_8)
+        System.arraycopy(b, 0, out, 0, minOf(b.size, 31))
+        return out
+    }
+
     /** Set this node's advertised GPS position. lat/lon in 1e-6 degrees (±90 / ±180). */
     fun setAdvertLatLon(latE6: Int, lonE6: Int): ByteArray =
         FrameWriter().u8(Cmd.SET_ADVERT_LATLON).i32(latE6).i32(lonE6).build()

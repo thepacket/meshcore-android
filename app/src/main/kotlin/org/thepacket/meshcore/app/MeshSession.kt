@@ -462,11 +462,13 @@ class MeshSession(
                 _contacts.value.firstOrNull { it.publicKey.contentEquals(f.publicKey) }?.let { addNeighbour(it) }
             }
             is Incoming.NewAdvert -> {
-                // also fold the new node into the contact list
+                // fold the new node into the contact list, and persist it on the device
+                // so discovered nodes survive (esp. in manual-add mode).
+                val isNewToUs = _contacts.value.none { it.publicKey.contentEquals(f.contact.publicKey) }
                 _contacts.update { list ->
-                    if (list.any { it.publicKey.contentEquals(f.contact.publicKey) }) list
-                    else (list + f.contact).sortedByDescending { it.lastAdvert }
+                    if (isNewToUs) (list + f.contact).sortedByDescending { it.lastAdvert } else list
                 }
+                if (isNewToUs) scope.launch { runCatching { link.send(Requests.addUpdateContact(f.contact)) } }
                 addNeighbour(f.contact)
                 upsertHeard(
                     HeardEntry(
