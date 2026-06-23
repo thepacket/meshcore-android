@@ -91,6 +91,10 @@ class MeshSession(
     private val _heard = MutableStateFlow<List<HeardEntry>>(emptyList())
     val heard: StateFlow<List<HeardEntry>> = _heard.asStateFlow()
 
+    /** Direct (one-hop) neighbours, for Tools → Discover. Cleared on announce, fills from adverts. */
+    private val _neighbours = MutableStateFlow<List<Contact>>(emptyList())
+    val neighbours: StateFlow<List<Contact>> = _neighbours.asStateFlow()
+
     // ---- settings (config that SELF_INFO doesn't return is fetched on connect) ----
     private val _tuning = MutableStateFlow<TuningParams?>(null)
     val tuning: StateFlow<TuningParams?> = _tuning.asStateFlow()
@@ -172,8 +176,18 @@ class MeshSession(
         scope.launch { runCatching { link.send(Requests.sendTracePath(tag, path)) } }
     }
 
-    /** Announce ourselves to direct neighbours with a zero-hop advert (Discover nearby nodes). */
-    fun announceZeroHop() = scope.launch { runCatching { link.send(Requests.sendSelfAdvert(flood = false)) } }.let {}
+    /** Clear the neighbour list and announce ourselves with a zero-hop advert (Discover nearby nodes). */
+    fun announceZeroHop() {
+        _neighbours.value = emptyList()
+        scope.launch { runCatching { link.send(Requests.sendSelfAdvert(flood = false)) } }
+    }
+
+    private fun addNeighbour(c: Contact) {
+        if (c.outPathLen != 0) return // only direct (one-hop)
+        _neighbours.update { list ->
+            if (list.any { it.publicKey.contentEquals(c.publicKey) }) list else list + c
+        }
+    }
 
     private fun dbg(msg: String) {
         Log.d(TAG, msg)
@@ -193,6 +207,7 @@ class MeshSession(
         _packetStats.value = null
         _noiseHistory.value = emptyList()
         _heard.value = emptyList()
+        _neighbours.value = emptyList()
         _tuning.value = null
         _autoAdd.value = null
         _deviceInfo.value = null
@@ -395,6 +410,7 @@ class MeshSession(
             is Incoming.ContactEntry -> contactAccumulator.add(f.contact)
             is Incoming.ContactsEnd -> {
                 _contacts.value = contactAccumulator.sortedByDescending { it.lastAdvert }
+                _neighbours.value = _contacts.value.filter { it.outPathLen == 0 } // seed direct neighbours
                 contactAccumulator.clear()
                 startChannelEnumeration() // then drains messages when done
             }
@@ -441,13 +457,17 @@ class MeshSession(
                     lastAdvertSnrQ = f.log.snrQ; lastAdvertRssi = f.log.rssi
                 }
             }
-            is Incoming.AdvertHeard -> upsertHeardByKey(f.publicKey)
+            is Incoming.AdvertHeard -> {
+                upsertHeardByKey(f.publicKey)
+                _contacts.value.firstOrNull { it.publicKey.contentEquals(f.publicKey) }?.let { addNeighbour(it) }
+            }
             is Incoming.NewAdvert -> {
                 // also fold the new node into the contact list
                 _contacts.update { list ->
                     if (list.any { it.publicKey.contentEquals(f.contact.publicKey) }) list
                     else (list + f.contact).sortedByDescending { it.lastAdvert }
                 }
+                addNeighbour(f.contact)
                 upsertHeard(
                     HeardEntry(
                         pubKeyHex = f.contact.publicKey.toHex(),

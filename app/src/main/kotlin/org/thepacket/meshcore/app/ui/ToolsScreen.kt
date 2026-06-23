@@ -46,7 +46,7 @@ fun ToolsContent(session: MeshSession, self: SelfInfo?, modifier: Modifier = Mod
     Box(modifier.fillMaxSize()) {
         when (open) {
             "trace" -> TraceTool(session, contacts, self) { open = null }
-            "discover" -> DiscoverTool(session, contacts) { open = null }
+            "discover" -> DiscoverTool(session) { open = null }
             else -> Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -137,9 +137,9 @@ private fun TraceTool(session: MeshSession, contacts: List<Contact>, self: SelfI
 }
 
 @Composable
-private fun DiscoverTool(session: MeshSession, contacts: List<Contact>, onBack: () -> Unit) {
-    // A node is a one-hop neighbour when its known return path is direct (out_path_len == 0).
-    val neighbours = remember(contacts) { contacts.filter { it.outPathLen == 0 } }
+private fun DiscoverTool(session: MeshSession, onBack: () -> Unit) {
+    // One-hop neighbours, tracked in the session (cleared on announce, fills from direct adverts).
+    val neighbours by session.neighbours.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
