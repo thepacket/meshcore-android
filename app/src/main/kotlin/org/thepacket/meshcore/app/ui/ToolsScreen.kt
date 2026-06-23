@@ -180,7 +180,11 @@ private fun TraceTool(session: MeshSession, contacts: List<Contact>, self: SelfI
                         kvRowMono("${i + 1}. $name", "SNR ${h.snrDb} dB")
                     }
                     kvRowMono("→ this node", "SNR ${r.finalSnrDb} dB")
-                    Button(onClick = { session.clearTrace() }, modifier = Modifier.fillMaxWidth()) { Text("New trace") }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Edit keeps the current path for tweaking; New clears it to start fresh.
+                        OutlinedButton(onClick = { session.clearTrace() }, modifier = Modifier.weight(1f)) { Text("Edit Path") }
+                        Button(onClick = { session.clearTrace(); selected.clear() }, modifier = Modifier.weight(1f)) { Text("New Path") }
+                    }
                 }
             }
         }
