@@ -75,6 +75,43 @@ object Requests {
         return out
     }
 
+    /** Remove a contact from the device store. Frame: [cmd, pubKey(32)]. */
+    fun removeContact(pubKey: ByteArray): ByteArray =
+        FrameWriter().u8(Cmd.REMOVE_CONTACT).bytes(pubKey.copyOf(32)).build()
+
+    /** Re-advertise a contact zero-hop so direct neighbours can discover it. Frame: [cmd, pubKey(32)]. */
+    fun shareContact(pubKey: ByteArray): ByteArray =
+        FrameWriter().u8(Cmd.SHARE_CONTACT).bytes(pubKey.copyOf(32)).build()
+
+    /** Forget a contact's learned return path (next message re-floods). Frame: [cmd, pubKey(32)]. */
+    fun resetPath(pubKey: ByteArray): ByteArray =
+        FrameWriter().u8(Cmd.RESET_PATH).bytes(pubKey.copyOf(32)).build()
+
+    /** Fetch one contact by full public key (reply RESP_CODE_CONTACT, or ERR if unknown). */
+    fun getContactByKey(pubKey: ByteArray): ByteArray =
+        FrameWriter().u8(Cmd.GET_CONTACT_BY_KEY).bytes(pubKey.copyOf(32)).build()
+
+    /**
+     * Export a shareable contact "card" (reply RESP_CODE_EXPORT_CONTACT carrying the raw
+     * advert packet). Pass null to export THIS node's own card.
+     */
+    fun exportContact(pubKey: ByteArray? = null): ByteArray {
+        val w = FrameWriter().u8(Cmd.EXPORT_CONTACT)
+        if (pubKey != null) w.bytes(pubKey.copyOf(32))
+        return w.build()
+    }
+
+    /** Import a contact from an exported "card" (the raw advert-packet bytes from [exportContact]). */
+    fun importContact(card: ByteArray): ByteArray =
+        FrameWriter().u8(Cmd.IMPORT_CONTACT).bytes(card).build()
+
+    /**
+     * Create or replace a channel slot. Frame: [cmd, index(1), name(32), secret(16)].
+     * `secret` is the 128-bit channel key (16 bytes; shorter input is zero-padded).
+     */
+    fun setChannel(index: Int, name: String, secret: ByteArray): ByteArray =
+        FrameWriter().u8(Cmd.SET_CHANNEL).u8(index).bytes(name32(name)).bytes(secret.copyOf(16)).build()
+
     /** Set this node's advertised GPS position. lat/lon in 1e-6 degrees (±90 / ±180). */
     fun setAdvertLatLon(latE6: Int, lonE6: Int): ByteArray =
         FrameWriter().u8(Cmd.SET_ADVERT_LATLON).i32(latE6).i32(lonE6).build()

@@ -34,9 +34,13 @@ fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double 
     return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-/** A group channel slot enumerated from the device. */
-data class ChannelEntry(val index: Int, val name: String) {
+/** A group channel slot enumerated from the device. [secret] is the 128-bit key (empty if unknown). */
+data class ChannelEntry(val index: Int, val name: String, val secret: ByteArray = ByteArray(0)) {
     val displayName: String get() = name.ifBlank { if (index == 0) "Public" else "Channel $index" }
+
+    override fun equals(other: Any?) = other is ChannelEntry &&
+        index == other.index && name == other.name && secret.contentEquals(other.secret)
+    override fun hashCode() = (index * 31 + name.hashCode()) * 31 + secret.contentHashCode()
 }
 
 /** Delivery lifecycle of a chat message. */

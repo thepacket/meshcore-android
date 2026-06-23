@@ -476,4 +476,46 @@ class FrameCodecTest {
         assertEquals("000aff10", b.toHex())
         assertArrayEquals(b, "000aff10".hexToBytes())
     }
+
+    @Test fun removeShareResetContactCarryFullKey() {
+        val key = ByteArray(32) { it.toByte() }
+        for ((frame, cmd) in listOf(
+            Requests.removeContact(key) to Cmd.REMOVE_CONTACT,
+            Requests.shareContact(key) to Cmd.SHARE_CONTACT,
+            Requests.resetPath(key) to Cmd.RESET_PATH,
+            Requests.getContactByKey(key) to Cmd.GET_CONTACT_BY_KEY,
+        )) {
+            assertEquals(1 + 32, frame.size)
+            assertEquals(cmd, frame[0].toInt())
+            assertArrayEquals(key, frame.copyOfRange(1, 33))
+        }
+    }
+
+    @Test fun exportContactSelfVsByKey() {
+        assertArrayEquals(byteArrayOf(Cmd.EXPORT_CONTACT.toByte()), Requests.exportContact(null))
+        val key = ByteArray(32) { (it + 1).toByte() }
+        val byKey = Requests.exportContact(key)
+        assertEquals(1 + 32, byKey.size)
+        assertArrayEquals(key, byKey.copyOfRange(1, 33))
+    }
+
+    @Test fun setChannelLayout() {
+        val secret = ByteArray(16) { (0xA0 + it).toByte() }
+        val f = Requests.setChannel(3, "longwave", secret)
+        assertEquals(1 + 1 + 32 + 16, f.size)
+        assertEquals(Cmd.SET_CHANNEL, f[0].toInt())
+        assertEquals(3, f[1].toInt())
+        // name is a NUL-terminated 32-byte field
+        assertArrayEquals("longwave".toByteArray(), f.copyOfRange(2, 2 + 8))
+        assertEquals(0, f[2 + 8].toInt())
+        assertArrayEquals(secret, f.copyOfRange(2 + 32, 2 + 32 + 16))
+    }
+
+    @Test fun decodeExportedContactCard() {
+        val card = byteArrayOf(0x11, 0x22, 0x33, 0x44)
+        val frame = byteArrayOf(Resp.EXPORT_CONTACT.toByte()) + card
+        val decoded = FrameDecoder.decode(frame)
+        assertTrue(decoded is Incoming.ExportedContact)
+        assertArrayEquals(card, (decoded as Incoming.ExportedContact).card)
+    }
 }

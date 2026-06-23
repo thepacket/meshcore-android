@@ -24,6 +24,7 @@ import org.thepacket.meshcore.protocol.Incoming
 import org.thepacket.meshcore.protocol.Lpp
 import org.thepacket.meshcore.protocol.PacketStats
 import org.thepacket.meshcore.protocol.PayloadType
+import org.thepacket.meshcore.protocol.hexToBytes
 import org.thepacket.meshcore.protocol.toHex
 import org.thepacket.meshcore.protocol.RadioStats
 import org.thepacket.meshcore.protocol.Requests
@@ -123,6 +124,10 @@ class MeshSession(
     /** Emitted after each settings write (OK/ERR) for UI feedback. */
     private val _settingsResult = MutableSharedFlow<SettingsResult>(extraBufferCapacity = 8)
     val settingsResult: SharedFlow<SettingsResult> = _settingsResult.asSharedFlow()
+
+    /** Emitted (as hex) when an exported contact "card" arrives, for the share/copy dialog. */
+    private val _exportedContact = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val exportedContact: SharedFlow<String> = _exportedContact.asSharedFlow()
 
     /** Labels of settings writes awaiting their OK/ERR reply (FIFO; link is sequential). */
     private val pendingSettings = ArrayDeque<String>()
@@ -378,6 +383,56 @@ class MeshSession(
         return root.toString(2)
     }
 
+    // ---- contact management ----------------------------------------------
+
+    /** Remove a contact from the device store (optimistically drop it locally too). */
+    fun removeContact(c: Contact) {
+        _contacts.update { list -> list.filterNot { it.publicKey.contentEquals(c.publicKey) } }
+        _neighbours.update { list -> list.filterNot { it.publicKey.contentEquals(c.publicKey) } }
+        scope.launch { runCatching { link.send(Requests.removeContact(c.publicKey)) } }
+    }
+
+    /** Re-advertise a contact zero-hop so direct neighbours can discover it. */
+    fun shareContact(c: Contact) {
+        scope.launch { runCatching { link.send(Requests.shareContact(c.publicKey)) } }
+    }
+
+    /** Forget a contact's learned return path; the next message re-floods. */
+    fun resetPath(c: Contact) {
+        _contacts.update { list ->
+            list.map { if (it.publicKey.contentEquals(c.publicKey)) it.copy(outPathLen = 0xFF) else it }
+        }
+        scope.launch { runCatching { link.send(Requests.resetPath(c.publicKey)) } }
+    }
+
+    /** Request an exportable "card" for a contact; the result arrives on [exportedContact]. */
+    fun exportContact(c: Contact) {
+        scope.launch { runCatching { link.send(Requests.exportContact(c.publicKey)) } }
+    }
+
+    /** Import a contact from a pasted "card" (hex). Re-syncs contacts shortly after to surface it. */
+    fun importContact(hex: String) {
+        val bytes = runCatching { hex.trim().replace(" ", "").lowercase().hexToBytes() }
+            .getOrNull() ?: return
+        if (bytes.size <= 2 + 32 + 64) return // firmware requires a full advert card
+        scope.launch {
+            runCatching { link.send(Requests.importContact(bytes)) }
+            delay(600)
+            runCatching { link.send(Requests.getContacts()) }
+        }
+    }
+
+    // ---- channel management ----------------------------------------------
+
+    /** Create or replace a channel slot (optimistically reflect it locally). */
+    fun setChannel(index: Int, name: String, secret: ByteArray) {
+        _channels.update { list ->
+            (list.filterNot { it.index == index } + ChannelEntry(index, name, secret.copyOf(16)))
+                .sortedBy { it.index }
+        }
+        scope.launch { runCatching { link.send(Requests.setChannel(index, name, secret)) } }
+    }
+
     private fun applySetting(label: String, frame: ByteArray) {
         pendingSettings.addLast(label)
         scope.launch { link.send(frame) }
@@ -416,7 +471,7 @@ class MeshSession(
             }
 
             is Incoming.ChannelInfo -> {
-                channelAccumulator.add(ChannelEntry(f.index, f.name))
+                channelAccumulator.add(ChannelEntry(f.index, f.name, f.secret))
                 _channels.value = channelAccumulator.toList()
                 if (f.index + 1 < MAX_CHANNELS) {
                     scope.launch { link.send(Requests.getChannel(f.index + 1)) }
@@ -448,6 +503,7 @@ class MeshSession(
             is Incoming.Battery -> _battStorage.value = f.info
             is Incoming.Telemetry -> _telemetry.value = f.readings
             is Incoming.Trace -> _traceResult.value = f.result
+            is Incoming.ExportedContact -> _exportedContact.tryEmit(f.card.toHex())
             is Incoming.SendConfirmed -> markDelivered(f.ackId, f.roundTripMs)
 
             is Incoming.RxPacket -> {

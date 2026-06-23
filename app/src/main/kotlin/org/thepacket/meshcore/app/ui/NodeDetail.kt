@@ -2,17 +2,26 @@ package org.thepacket.meshcore.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -43,6 +52,10 @@ fun NodeDetailSheet(
     heard: HeardEntry?,
     self: SelfInfo?,
     onDismiss: () -> Unit,
+    onShare: (() -> Unit)? = null,
+    onResetPath: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null,
+    onRemove: (() -> Unit)? = null,
 ) {
     val coords: Pair<Double, Double>? = when {
         isSelf && self != null && (self.advLat != 0 || self.advLon != 0) -> self.advLat / 1e6 to self.advLon / 1e6
@@ -96,8 +109,49 @@ fun NodeDetailSheet(
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
                     Text(it, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                 }
+
+                if (onShare != null || onResetPath != null || onExport != null || onRemove != null) {
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                    ContactActions(onShare, onResetPath, onExport, onRemove)
+                }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ContactActions(
+    onShare: (() -> Unit)?,
+    onResetPath: (() -> Unit)?,
+    onExport: (() -> Unit)?,
+    onRemove: (() -> Unit)?,
+) {
+    var confirmRemove by remember { mutableStateOf(false) }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        onShare?.let { OutlinedButton(onClick = it) { Text("Share") } }
+        onResetPath?.let { OutlinedButton(onClick = it) { Text("Reset path") } }
+        onExport?.let { OutlinedButton(onClick = it) { Text("Export") } }
+        onRemove?.let {
+            OutlinedButton(
+                onClick = { confirmRemove = true },
+                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error),
+            ) { Text("Remove") }
+        }
+    }
+    if (confirmRemove && onRemove != null) {
+        AlertDialog(
+            onDismissRequest = { confirmRemove = false },
+            title = { Text("Remove contact?") },
+            text = { Text("This deletes the contact from the device. You can re-add it from a future advert.") },
+            confirmButton = {
+                TextButton(onClick = { confirmRemove = false; onRemove() }) {
+                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel") } },
+        )
     }
 }
 

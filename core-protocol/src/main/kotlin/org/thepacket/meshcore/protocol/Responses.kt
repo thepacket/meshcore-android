@@ -37,6 +37,12 @@ sealed interface Incoming {
         override fun hashCode() = index
     }
 
+    /** Reply to CMD_EXPORT_CONTACT (RESP_CODE_EXPORT_CONTACT): the raw advert-packet "card" bytes. */
+    data class ExportedContact(val card: ByteArray) : Incoming {
+        override fun equals(other: Any?) = other is ExportedContact && card.contentEquals(other.card)
+        override fun hashCode() = card.contentHashCode()
+    }
+
     // ---- pushes ----
     data class AdvertHeard(val publicKey: ByteArray) : Incoming {
         override fun equals(other: Any?) = other is AdvertHeard && publicKey.contentEquals(other.publicKey)
@@ -111,6 +117,7 @@ object FrameDecoder {
                 Resp.CHANNEL_MSG_RECV, Resp.CHANNEL_MSG_RECV_V3 ->
                     Incoming.Message(parseMessage(r, channel = true, v3 = code == Resp.CHANNEL_MSG_RECV_V3))
                 Resp.CHANNEL_INFO -> Incoming.ChannelInfo(r.u8(), r.cstr(32), r.bytes(minOf(16, r.remaining)))
+                Resp.EXPORT_CONTACT -> Incoming.ExportedContact(r.rest())
 
                 Push.ADVERT -> Incoming.AdvertHeard(r.bytes(minOf(32, r.remaining)))
                 Push.NEW_ADVERT -> Incoming.NewAdvert(parseContact(r))

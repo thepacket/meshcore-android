@@ -13,3 +13,6 @@ local.properties
 *.aab
 *.keystore
 !debug.keystore
+
+# Kotlin compiler session artifacts
+.kotlin/
