@@ -47,8 +47,11 @@ The app has seven tabs — **Chats · Heard · Packets · Stats · Map · Tools 
     that answer (**companions, repeaters, room servers and sensors**), each tagged with
     its type and signal, sorted by signal strength. New nodes are added to contacts.
     Discover and Clear are user-driven, with an optional 60-second auto-refresh.
+  - **Advertise** — announce this node **zero-hop** (direct neighbours) or **flood-routed**
+    (whole mesh), or copy its advert **card to the clipboard** for sharing.
 - **Settings** — full editable device config: node name, **region presets**, frequency,
-  bandwidth, SF, coding rate, **TX power**, advertised **position (set from a map)**,
+  bandwidth, SF, coding rate, **TX power**, **client-repeat** (with a guard for the
+  firmware's allowed repeat frequencies), advertised **position (set from a map)**,
   network/telemetry options, tuning, auto-add, experimental **path-hash size**; plus
   **Device info**, config/app-data **export & import**, debug logs, reboot and factory
   reset.
@@ -69,7 +72,7 @@ location, which the OS requires for BLE scanning).
 | Remote telemetry (request a contact's telemetry) | ✅ done, hardware-validated |
 | Last-heard | ✅ done, hardware-validated |
 | Map (node positions) | ✅ done, hardware-validated |
-| Tools — trace path (on map) + node discovery | ✅ done, hardware-validated |
+| Tools — trace path (on map) + node discovery + advertise | ✅ done, hardware-validated |
 | Repeater management (remote login/stats/triggers) | ⏸️ deferred until a repeater is available to test |
 
 ## Module layout
