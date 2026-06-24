@@ -18,6 +18,8 @@ import org.thepacket.meshcore.ble.MeshCoreLink
 import org.thepacket.meshcore.protocol.AutoAddConfig
 import org.thepacket.meshcore.protocol.BattAndStorage
 import org.thepacket.meshcore.protocol.Contact
+import org.thepacket.meshcore.protocol.ContactType
+import org.thepacket.meshcore.protocol.PacketInspector
 import org.thepacket.meshcore.protocol.CoreStats
 import org.thepacket.meshcore.protocol.DeviceInfo
 import org.thepacket.meshcore.protocol.Incoming
@@ -132,6 +134,10 @@ class MeshSession(
     /** Emitted (as hex) when an exported contact "card" arrives, for the share/copy dialog. */
     private val _exportedContact = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val exportedContact: SharedFlow<String> = _exportedContact.asSharedFlow()
+
+    /** Emitted (key-prefix hex) when a contact is imported, so the UI can scroll to it. */
+    private val _importedContact = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val importedContact: SharedFlow<String> = _importedContact.asSharedFlow()
 
     /** Labels of settings writes awaiting their OK/ERR reply (FIFO; link is sequential). */
     private val pendingSettings = ArrayDeque<String>()
@@ -426,16 +432,36 @@ class MeshSession(
         scope.launch { runCatching { link.send(Requests.exportContact(c.publicKey)) } }
     }
 
-    /** Import a contact from a pasted "card" (hex). Re-syncs contacts shortly after to surface it. */
+    /**
+     * Import a contact from a pasted "card" (hex). The card is a self-advert packet, so we can
+     * decode it locally and add the contact optimistically — no full contacts resync needed
+     * (that re-downloads every contact and takes seconds). The device still persists it via
+     * IMPORT_CONTACT; the next full sync reconciles any fields not carried by the advert.
+     */
     fun importContact(hex: String) {
         val bytes = runCatching { hex.trim().replace(" ", "").lowercase().hexToBytes() }
             .getOrNull() ?: return
         if (bytes.size <= 2 + 32 + 64) return // firmware requires a full advert card
-        scope.launch {
-            runCatching { link.send(Requests.importContact(bytes)) }
-            delay(600)
-            runCatching { link.send(Requests.getContacts()) }
+        scope.launch { runCatching { link.send(Requests.importContact(bytes)) } }
+
+        val adv = PacketInspector.parse(bytes)
+        val key = adv.advertPubKey ?: return
+        val contact = Contact(
+            publicKey = key,
+            type = adv.advertType ?: ContactType.CHAT,
+            flags = 0,
+            outPathLen = 0xFF, // path unknown until learned (renders as "flood / unknown")
+            outPath = ByteArray(64),
+            name = adv.advertName ?: "",
+            lastAdvert = adv.advertTimestamp ?: 0,
+            gpsLat = adv.advertLat ?: 0,
+            gpsLon = adv.advertLon ?: 0,
+            lastMod = System.currentTimeMillis() / 1000,
+        )
+        _contacts.update { list ->
+            (list.filterNot { it.publicKey.contentEquals(key) } + contact).sortedByDescending { it.lastAdvert }
         }
+        _importedContact.tryEmit(contact.keyPrefixHex)
     }
 
     // ---- channel management ----------------------------------------------

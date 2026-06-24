@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -34,6 +35,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +56,8 @@ import org.thepacket.meshcore.protocol.ContactType
 import org.thepacket.meshcore.protocol.SelfInfo
 import org.thepacket.meshcore.protocol.toHex
 import org.thepacket.meshcore.protocol.hexToBytes
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -102,10 +107,27 @@ private fun ContactsList(
     var detail by remember { mutableStateOf<Contact?>(null) }
     var showImport by remember { mutableStateOf(false) }
     val contactTelemetry by session.contactTelemetry.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
 
     // Sorted alphabetically by display name (case-insensitive).
     val sorted = remember(contacts) {
         contacts.sortedBy { (it.name.ifBlank { it.keyPrefixHex }).lowercase() }
+    }
+
+    // After an import, the list is rebuilt and LazyColumn keeps its scroll anchor, so a
+    // newly-added row can land off-screen. Scroll to the imported contact once it appears
+    // in the (possibly not-yet-recomposed) sorted list.
+    val sortedState = rememberUpdatedState(sorted)
+    LaunchedEffect(session) {
+        session.importedContact.collect { key ->
+            // Wait until the imported row is present in the data, then let the rebuilt list
+            // fully settle before scrolling — scrolling mid-rebuild uses stale measurements
+            // and the LazyColumn re-anchors to the previously-first key, hiding the new row.
+            snapshotFlow { sortedState.value.indexOfFirst { it.keyPrefixHex == key } }.first { it >= 0 }
+            delay(350)
+            val idx = sortedState.value.indexOfFirst { it.keyPrefixHex == key }
+            if (idx >= 0) listState.animateScrollToItem(idx)
+        }
     }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
@@ -119,6 +141,7 @@ private fun ContactsList(
         } else {
             LazyColumn(
                 Modifier.fillMaxSize(),
+                state = listState,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
