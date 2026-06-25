@@ -36,7 +36,7 @@ fun ConnectScreen(
     onScanToggle: () -> Unit,
     onConnect: (ScannedDevice) -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = { Text("MeshCore") }) }) { pad ->
+    Scaffold(topBar = { TopAppBar(title = { Text("MeshKore") }) }) { pad ->
         Column(
             Modifier.fillMaxSize().padding(pad).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

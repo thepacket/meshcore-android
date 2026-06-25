@@ -49,7 +49,7 @@ fun MainScaffold(
     onOpenConversation: (id: String, title: String) -> Unit,
 ) {
     val title = when (tab) {
-        MainTab.Chats -> self?.name?.ifBlank { "MeshCore" } ?: "MeshCore"
+        MainTab.Chats -> self?.name?.ifBlank { "MeshKore" } ?: "MeshKore"
         MainTab.Heard -> "Heard"
         MainTab.Packets -> "Packet monitor"
         MainTab.Stats -> "Statistics"
