@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "meshcore-android"
+rootProject.name = "meshkore"
 
 include(":core-protocol")
 include(":core-ble")
