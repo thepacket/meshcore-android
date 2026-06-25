@@ -1,4 +1,4 @@
-# meshcore-android
+# MeshKore
 
 > ⚠️ **Early development.** The core feature set is built and **validated on real
 > hardware**, but this is young software — expect rough edges and breaking changes.
