@@ -7,11 +7,6 @@ An open-source (**MIT**) Android client for [MeshCore](https://github.com/meshco
 **companion** devices over **BLE** — an alternative to the official app, built natively in
 **Kotlin + Jetpack Compose**.
 
-This is a separate, parallel project to
-[meshcore-standalone](https://github.com/thepacket/meshcore-standalone) (the on-device
-T-Deck UI). That one runs *on* the radio; this one talks *to* it from a phone. The two
-keep their own, independent visual languages.
-
 ## Features
 
 Connect to a companion device over BLE — including **PIN/passkey pairing** for
