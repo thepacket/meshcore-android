@@ -47,6 +47,9 @@ fun MainScaffold(
     noiseHistory: List<Int>,
     telemetry: List<org.thepacket.meshcore.protocol.Lpp.Reading>,
     onOpenConversation: (id: String, title: String) -> Unit,
+    mapFocus: Pair<Double, Double>? = null,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit = { _, _ -> },
+    onMapFocusConsumed: () -> Unit = {},
 ) {
     val title = when (tab) {
         MainTab.Chats -> self?.name?.ifBlank { "MeshKore" } ?: "MeshKore"
@@ -113,12 +116,12 @@ fun MainScaffold(
     ) { pad ->
         val m = Modifier.padding(pad)
         when (tab) {
-            MainTab.Chats -> HomeContent(session, self, channels, contacts, onOpenConversation, m)
-            MainTab.Heard -> HeardContent(heard, contacts, self, m)
-            MainTab.Packets -> PacketMonitorContent(packets, contacts, self, m)
+            MainTab.Chats -> HomeContent(session, self, channels, contacts, onOpenConversation, m, onShowOnMap)
+            MainTab.Heard -> HeardContent(heard, contacts, self, m, onShowOnMap)
+            MainTab.Packets -> PacketMonitorContent(packets, contacts, self, m, onShowOnMap)
             MainTab.Stats -> StatsContent(radio, core, packetStats, noiseHistory, telemetry, session::refreshTelemetry, m)
-            MainTab.Map -> MapContent(self, contacts, heard, m)
-            MainTab.Tools -> ToolsContent(session, self, m)
+            MainTab.Map -> MapContent(self, contacts, heard, m, focus = mapFocus, onFocusConsumed = onMapFocusConsumed)
+            MainTab.Tools -> ToolsContent(session, self, m, onShowOnMap)
             MainTab.Settings -> SettingsContent(session, self, m)
         }
     }

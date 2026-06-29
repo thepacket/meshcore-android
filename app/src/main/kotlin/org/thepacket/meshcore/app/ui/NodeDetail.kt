@@ -8,10 +8,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -62,6 +66,8 @@ fun NodeDetailSheet(
     onRequestTelemetry: (() -> Unit)? = null,
     telemetry: List<Lpp.Reading>? = null,
     onManage: (() -> Unit)? = null,
+    /** Shown (with the node's coordinates) only when the node has a known position. */
+    onShowOnMap: ((lat: Double, lon: Double) -> Unit)? = null,
 ) {
     val coords: Pair<Double, Double>? = when {
         isSelf && self != null && (self.advLat != 0 || self.advLon != 0) -> self.advLat / 1e6 to self.advLon / 1e6
@@ -72,6 +78,16 @@ fun NodeDetailSheet(
     val selfHasGps = self != null && (self.advLat != 0 || self.advLon != 0)
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            }
+            Text("Back", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        }
         SelectionContainer {
             Column(
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
@@ -96,6 +112,13 @@ fun NodeDetailSheet(
                 contact?.let { if (it.lastAdvert > 0) kvRow("Last advert", epochStr(it.lastAdvert)) }
                 contact?.let {
                     kvRow("Path", if (it.outPathLen in 0..63) "${it.outPathLen} hop(s)" else "flood / unknown")
+                }
+
+                if (onShowOnMap != null && coords != null) {
+                    OutlinedButton(
+                        onClick = { onShowOnMap(coords.first, coords.second); onDismiss() },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    ) { Text("Show on map") }
                 }
 
                 if (isSelf) self?.let {

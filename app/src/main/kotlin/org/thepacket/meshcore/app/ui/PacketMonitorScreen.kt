@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.thepacket.meshcore.app.haversineKm
 import org.thepacket.meshcore.protocol.Contact
 import org.thepacket.meshcore.protocol.PacketInspector
 import org.thepacket.meshcore.protocol.ParsedPacket
@@ -47,6 +48,7 @@ fun PacketMonitorContent(
     contacts: List<Contact>,
     self: SelfInfo?,
     modifier: Modifier = Modifier,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit = { _, _ -> },
 ) {
     var detail by remember { mutableStateOf<RxLog?>(null) }
 
@@ -68,7 +70,7 @@ fun PacketMonitorContent(
 
     detail?.let { log ->
         val parsed = remember(log) { PacketInspector.parse(log.raw) }
-        PacketDetailDialog(log, parsed, contacts, self) { detail = null }
+        PacketDetailDialog(log, parsed, contacts, self, onShowOnMap) { detail = null }
     }
 }
 
@@ -78,11 +80,16 @@ private fun PacketDetailDialog(
     p: ParsedPacket,
     contacts: List<Contact>,
     self: SelfInfo?,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val srcPos = sourcePosition(p, contacts)
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        dismissButton = srcPos?.let {
+            { TextButton(onClick = { onShowOnMap(it.first, it.second); onDismiss() }) { Text("Show on map") } }
+        },
         title = { Text("${p.typeName} packet") },
         text = {
             SelectionContainer {
@@ -113,6 +120,7 @@ private fun PacketDetailDialog(
                     p.ackCode?.let { kv("ACK code", it.toHex()) }
                     p.traceTag?.let { kv("Trace tag", "0x%08X".format(it)) }
 
+                    kv("Received", clockTime(log.receivedAtMs))
                     kv("SNR / RSSI", "${log.snrDb} dB / ${log.rssi} dBm")
                     kv("Length", "${log.length} B  (payload ${p.payloadLen} B)")
                     kv("Header", "0x%02X".format(p.header))
@@ -169,6 +177,10 @@ private fun epoch(sec: Long): String =
 private fun PacketRow(p: RxLog, contacts: List<Contact>, self: SelfInfo?, onClick: () -> Unit) {
     val parsed = remember(p) { PacketInspector.parse(p.raw) }
     val source = rowSource(parsed, contacts, self)
+    val selfHasGps = self != null && (self.advLat != 0 || self.advLon != 0)
+    val srcPos = sourcePosition(parsed, contacts)
+    val distanceKm = if (selfHasGps && srcPos != null)
+        haversineKm(self!!.advLat / 1e6, self.advLon / 1e6, srcPos.first, srcPos.second) else null
     Row(
         Modifier
             .fillMaxWidth()
@@ -192,7 +204,32 @@ private fun PacketRow(p: RxLog, contacts: List<Contact>, self: SelfInfo?, onClic
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
         }
+        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            Text(clockTime(p.receivedAtMs), style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                fontFamily = FontFamily.Monospace)
+            Text(ageLabel(p.receivedAtMs), style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+            if (distanceKm != null) {
+                Text(fmtDistance(distanceKm), style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
+            }
+        }
     }
+}
+
+/** Source GPS (lat, lon in degrees) for a packet: advert body, else the resolved contact. */
+private fun sourcePosition(p: ParsedPacket, contacts: List<Contact>): Pair<Double, Double>? {
+    val lat = p.advertLat; val lon = p.advertLon
+    if (lat != null && lon != null && (lat != 0 || lon != 0)) return (lat / 1e6) to (lon / 1e6)
+    val c = p.advertPubKey?.let { key ->
+        contacts.firstOrNull { it.publicKey.size >= 32 && it.publicKey.copyOf(32).contentEquals(key.copyOf(32)) }
+    } ?: p.srcHash?.let { hash ->
+        contacts.firstOrNull { it.publicKey.isNotEmpty() && (it.publicKey[0].toInt() and 0xFF) == hash }
+    }
+    val cLat = c?.latDegrees ?: return null
+    val cLon = c.lonDegrees ?: return null
+    return cLat to cLon
 }
 
 /** A short source label for the list row: advertiser, or src-hash → contact, else null. */

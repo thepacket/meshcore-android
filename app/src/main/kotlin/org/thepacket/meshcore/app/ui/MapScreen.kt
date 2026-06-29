@@ -60,6 +60,9 @@ fun MapContent(
     contacts: List<Contact>,
     heard: List<HeardEntry>,
     modifier: Modifier = Modifier,
+    // When set, centre the map on these coordinates once, then call [onFocusConsumed].
+    focus: Pair<Double, Double>? = null,
+    onFocusConsumed: () -> Unit = {},
     // Trace mode: the same map, but tapping a node with a contact appends it to the
     // ordered path ([tracePath], duplicates allowed); long-press shows its details.
     traceMode: Boolean = false,
@@ -76,6 +79,7 @@ fun MapContent(
     holder.traceMode = traceMode
     holder.traceCounts = tracePath.groupingBy { it.keyPrefixHex }.eachCount()
     holder.onAddTrace = onAddTrace
+    holder.focus = focus
     var selected by remember { mutableStateOf<MapNode?>(null) }
     holder.onSelect = { selected = it }
     holder.onInfo = { selected = it }
@@ -102,7 +106,14 @@ fun MapContent(
             },
             update = { map ->
                 rebuildOverlays(map, holder, nodeIcons, clusterIcons, badgeIcons)
-                if (!holder.centered && nodes.isNotEmpty()) {
+                val f = holder.focus
+                if (f != null && f != holder.appliedFocus) {
+                    map.controller.setCenter(GeoPoint(f.first, f.second))
+                    if (map.zoomLevelDouble < 13.0) map.controller.setZoom(15.0)
+                    holder.appliedFocus = f
+                    holder.centered = true
+                    onFocusConsumed()
+                } else if (!holder.centered && nodes.isNotEmpty()) {
                     map.controller.setCenter(GeoPoint(nodes[0].lat, nodes[0].lon))
                     if (map.zoomLevelDouble < 5.0) map.controller.setZoom(11.0)
                     holder.centered = true
@@ -139,6 +150,8 @@ fun MapContent(
 private class MapHolder {
     var nodes: List<MapNode> = emptyList()
     var centered = false
+    var focus: Pair<Double, Double>? = null
+    var appliedFocus: Pair<Double, Double>? = null
     var onSelect: (MapNode) -> Unit = {}
     var onInfo: (MapNode) -> Unit = {}
     var traceMode = false

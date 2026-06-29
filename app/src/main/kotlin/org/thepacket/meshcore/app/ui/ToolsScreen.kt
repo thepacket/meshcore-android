@@ -62,7 +62,12 @@ import org.thepacket.meshcore.protocol.DiscoveredNode
 import org.thepacket.meshcore.protocol.SelfInfo
 
 @Composable
-fun ToolsContent(session: MeshSession, self: SelfInfo?, modifier: Modifier = Modifier) {
+fun ToolsContent(
+    session: MeshSession,
+    self: SelfInfo?,
+    modifier: Modifier = Modifier,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit = { _, _ -> },
+) {
     val contacts by session.contacts.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf<String?>(null) }
     val ctx = LocalContext.current
@@ -79,7 +84,7 @@ fun ToolsContent(session: MeshSession, self: SelfInfo?, modifier: Modifier = Mod
     Box(modifier.fillMaxSize()) {
         when (open) {
             "trace" -> TraceTool(session, contacts, self) { open = null }
-            "discover" -> DiscoverTool(session, self) { open = null }
+            "discover" -> DiscoverTool(session, self, onShowOnMap) { open = null }
             else -> Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -234,6 +239,7 @@ private val ALL_NODE_TYPES =
 private fun DiscoverTool(
     session: MeshSession,
     self: SelfInfo?,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit,
     onBack: () -> Unit,
 ) {
     // Blind, zero-hop node-discovery: direct neighbours answer our request. The list is only
@@ -313,6 +319,7 @@ private fun DiscoverTool(
             onDismiss = { selected = null },
             onRequestTelemetry = c?.let { { session.requestTelemetry(it) } },
             telemetry = c?.let { contactTelemetry[it.keyPrefixHex] },
+            onShowOnMap = onShowOnMap,
         )
     }
 }

@@ -33,6 +33,8 @@ data class UiState(
     val error: String? = null,
     val screen: Screen = Screen.Connect,
     val tab: MainTab = MainTab.Chats,
+    /** When set, the Map tab should centre on these coordinates (lat, lon in degrees). */
+    val mapFocus: Pair<Double, Double>? = null,
 )
 
 class ConnectionViewModel(app: Application) : AndroidViewModel(app) {
@@ -142,6 +144,13 @@ class ConnectionViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- navigation ----
     fun setTab(tab: MainTab) = _ui.update { it.copy(tab = tab) }
+
+    /** Jump to the Map tab and centre it on a node's coordinates. */
+    fun showOnMap(lat: Double, lon: Double) =
+        _ui.update { it.copy(tab = MainTab.Map, mapFocus = lat to lon) }
+
+    /** The Map consumed its pending focus target. */
+    fun consumeMapFocus() = _ui.update { it.copy(mapFocus = null) }
 
     fun openConversation(id: String, title: String) =
         _ui.update { it.copy(screen = Screen.Conversation(id, title)) }

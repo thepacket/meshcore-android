@@ -33,6 +33,9 @@ import org.thepacket.meshcore.app.HeardEntry
 import org.thepacket.meshcore.app.haversineKm
 import org.thepacket.meshcore.protocol.Contact
 import org.thepacket.meshcore.protocol.SelfInfo
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun HeardContent(
@@ -40,6 +43,7 @@ fun HeardContent(
     contacts: List<Contact>,
     self: SelfInfo?,
     modifier: Modifier = Modifier,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit = { _, _ -> },
 ) {
     if (heard.isEmpty()) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -57,26 +61,38 @@ fun HeardContent(
         items(heard, key = { it.pubKeyHex }) { h ->
             val distanceKm = if (selfHasGps && h.hasGps)
                 haversineKm(self!!.advLat / 1e6, self.advLon / 1e6, h.latDeg, h.lonDeg) else null
-            HeardRow(h, distanceKm) { selected = h }
+            HeardRow(h, resolveHeardName(h, contacts), distanceKm) { selected = h }
         }
     }
 
     selected?.let { h ->
         val contact = contacts.firstOrNull { h.pubKeyHex.startsWith(it.keyPrefixHex) }
         NodeDetailSheet(
-            name = h.name,
+            name = resolveHeardName(h, contacts),
             type = contact?.type ?: h.type,
             isSelf = false,
             contact = contact,
             heard = h,
             self = self,
             onDismiss = { selected = null },
+            onShowOnMap = onShowOnMap,
         )
     }
 }
 
+/**
+ * Resolve a heard entry to a friendly name. The [AdvertHeard] push that feeds many entries
+ * carries only a public key, so the stored [HeardEntry.name] is often just hex. Match against
+ * the current contact list (full key, else key-prefix) and prefer a real contact name; fall
+ * back to whatever name the entry already carries.
+ */
+private fun resolveHeardName(h: HeardEntry, contacts: List<Contact>): String {
+    val contact = contacts.firstOrNull { h.pubKeyHex.startsWith(it.keyPrefixHex) }
+    return contact?.name?.ifBlank { null } ?: h.name
+}
+
 @Composable
-private fun HeardRow(h: HeardEntry, distanceKm: Double?, onClick: () -> Unit) {
+private fun HeardRow(h: HeardEntry, name: String, distanceKm: Double?, onClick: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
             Modifier.fillMaxWidth().padding(12.dp),
@@ -85,7 +101,7 @@ private fun HeardRow(h: HeardEntry, distanceKm: Double?, onClick: () -> Unit) {
         ) {
             SignalDot(h.snrDb)
             Column(Modifier.weight(1f)) {
-                Text(h.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 val signal = buildString {
                     if (h.snrDb != null) append("SNR ${h.snrDb} dB")
                     if (h.rssi != null) { if (isNotEmpty()) append(" · "); append("RSSI ${h.rssi}") }
@@ -95,6 +111,9 @@ private fun HeardRow(h: HeardEntry, distanceKm: Double?, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace)
             }
             Column(horizontalAlignment = Alignment.End) {
+                Text(clockTime(h.lastHeardMs), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    fontFamily = FontFamily.Monospace)
                 Text(ageLabel(h.lastHeardMs), style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 if (distanceKm != null) {
@@ -122,7 +141,7 @@ private fun SignalDot(snrDb: Double?) {
     }
 }
 
-private fun ageLabel(ms: Long): String {
+internal fun ageLabel(ms: Long): String {
     val secs = ((System.currentTimeMillis() - ms) / 1000).coerceAtLeast(0)
     return when {
         secs < 60 -> "${secs}s ago"
@@ -131,5 +150,9 @@ private fun ageLabel(ms: Long): String {
     }
 }
 
-private fun fmtDistance(km: Double): String =
+/** Wall-clock time-of-day, e.g. "14:03:27". */
+internal fun clockTime(ms: Long): String =
+    SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(ms))
+
+internal fun fmtDistance(km: Double): String =
     if (km < 1.0) "${(km * 1000).toInt()} m" else "%.1f km".format(km)

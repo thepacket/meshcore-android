@@ -79,6 +79,7 @@ fun HomeContent(
     contacts: List<Contact>,
     onOpenConversation: (id: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit = { _, _ -> },
 ) {
     var tab by remember { mutableIntStateOf(0) }
     // An exported contact card arrives asynchronously — show it for copy/share.
@@ -96,7 +97,7 @@ fun HomeContent(
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Channels") })
         }
         when (tab) {
-            0 -> ContactsList(session, self, contacts, onOpenConversation)
+            0 -> ContactsList(session, self, contacts, onOpenConversation, onShowOnMap)
             else -> ChannelsList(session, channels, onOpenConversation)
         }
     }
@@ -113,6 +114,7 @@ private fun ContactsList(
     self: SelfInfo?,
     contacts: List<Contact>,
     onOpen: (String, String) -> Unit,
+    onShowOnMap: (lat: Double, lon: Double) -> Unit = { _, _ -> },
 ) {
     var detail by remember { mutableStateOf<Contact?>(null) }
     var manage by remember { mutableStateOf<Contact?>(null) }
@@ -217,6 +219,7 @@ private fun ContactsList(
             onManage = if (c.type == ContactType.REPEATER || c.type == ContactType.ROOM) {
                 { manage = c; detail = null }
             } else null,
+            onShowOnMap = onShowOnMap,
         )
     }
 

@@ -117,6 +117,9 @@ class MainActivity : ComponentActivity() {
                         noiseHistory = noise,
                         telemetry = telemetry,
                         onOpenConversation = vm::openConversation,
+                        mapFocus = state.mapFocus,
+                        onShowOnMap = vm::showOnMap,
+                        onMapFocusConsumed = vm::consumeMapFocus,
                     )
                     is Screen.Conversation -> {
                         // A room-server conversation gets a login banner + per-post authors.
